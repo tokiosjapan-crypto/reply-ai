@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <!-- スマホ対応の表示設定（viewport-fit=cover は iPhoneのノッチ対応） -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1a5fb4">
+  <title>スマリブ返信AI</title>
+
+  <!-- PWA（ホーム画面アプリ化）用の設定ファイル -->
+  <link rel="manifest" href="manifest.json">
+  <!-- iPhoneのホーム画面アイコン -->
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="返信AI">
+
+  <style>
+    /* ============================================
+       色はここで一元管理（CSS変数）
+       ライトモードの色
+       ============================================ */
+    :root {
+      --primary: #1a5fb4;        /* メインの紺色 */
+      --primary-hover: #15498c;  /* ボタンを押した時の濃い紺 */
+      --bg: #f2f4f7;             /* 画面全体の背景グレー */
+      --surface: #ffffff;        /* カードや入力欄の白 */
+      --text: #1c2430;           /* 文字色 */
+      --text-sub: #5c6675;       /* 薄い文字色（補足など） */
+      --border: #d4dae3;         /* 枠線の色 */
+      --success: #2a7d3f;        /* 成功時の緑（最小限の使用） */
+      --error-bg: #fdecea;       /* エラー帯の背景（赤系） */
+      --error-text: #b3261e;     /* エラー文字色 */
+      --error-border: #e8a9a4;   /* エラー帯の枠線 */
+    }
+
+    /* ダークモードの色（手動トグルで切り替え） */
+    :root[data-theme="dark"] {
+      --primary: #4a8fe0;
+      --primary-hover: #6aa5e8;
+      --bg: #14181f;
+      --surface: #1e242e;
+      --text: #e6eaf0;
+      --text-sub: #99a3b2;
+      --border: #3a4350;
+      --success: #5dbb74;
+      --error-bg: #3a2020;
+      --error-text: #f2998f;
+      --error-border: #6b3a36;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      /* iPhoneホームバーの分だけ下に余白を確保 */
+      padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    }
+
+    /* ============================================
+       ヘッダー
+       ============================================ */
+    header {
+      height: 48px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    header h1 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    /* ダークモード切り替えボタン */
+    #theme-toggle {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      padding: 6px 10px;
+      cursor: pointer;
+      min-height: 32px;
+    }
+
+    /* ============================================
+       レイアウト（スマホ＝1カラム / PC＝2カラム）
+       ============================================ */
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 16px;
+      display: grid;
+      grid-template-columns: 1fr;  /* スマホは縦1列 */
+      gap: 16px;
+    }
+    @media (min-width: 900px) {
+      main {
+        grid-template-columns: 1fr 1fr;  /* PCは左右2列 */
+        align-items: start;
+      }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    label.field-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-sub);
+      margin-bottom: 6px;
+      margin-top: 14px;
+    }
+    label.field-label:first-child { margin-top: 0; }
+
+    /* ============================================
+       入力欄（textarea / input）
+       font-size 16px は iOSの自動ズームを防ぐため必須
+       ============================================ */
+    textarea, input[type="text"] {
+      width: 100%;
+      font-size: 16px;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      resize: vertical;
+    }
+    textarea:focus, input[type="text"]:focus {
+      outline: 2px solid var(--primary);
+      border-color: transparent;
+    }
+
+    /* ============================================
+       セグメントボタン（問い合わせ元・トーン選択）
+       ============================================ */
+    .segment {
+      display: flex;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .segment button {
+      flex: 1;
+      min-height: 44px;
+      font-size: 14px;
+      font-family: inherit;
+      background: var(--surface);
+      color: var(--text);
+      border: none;
+      border-right: 1px solid var(--border);
+      cursor: pointer;
+    }
+    .segment button:last-child { border-right: none; }
+    /* 選択中のボタンをハイライト */
+    .segment button.active {
+      background: var(--primary);
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    /* ============================================
+       ボタン類
+       ============================================ */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 44px;
+      font-size: 16px;
+      font-family: inherit;
+      font-weight: 600;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      padding: 0 16px;
+    }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* 生成ボタン（プライマリカラーの大きいボタン） */
+    .btn-primary {
+      width: 100%;
+      min-height: 48px;
+      background: var(--primary);
+      color: #ffffff;
+      border: none;
+      margin-top: 16px;
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+
+    /* ローディングスピナー（処理待ち表示・装飾ではない） */
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading .spinner { display: inline-block; }
+
+    /* ============================================
+       結果表示（タブ・本文・エラー帯）
+       ============================================ */
+    .tabs {
+      display: flex;
+      border-bottom: 2px solid var(--border);
+      margin-bottom: 12px;
+    }
+    .tabs button {
+      flex: 1;
+      min-height: 44px;
+      font-size: 15px;
+      font-family: inherit;
+      font-weight: 600;
+      background: none;
+      border: none;
+      color: var(--text-sub);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+    }
+    .tabs button.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    /* エラー表示の赤い帯 */
+    #error-bar {
+      display: none;
+      background: var(--error-bg);
+      color: var(--error-text);
+      border: 1px solid var(--error-border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+
+    /* 生成結果の本文エリア */
+    #result-text {
+      white-space: pre-wrap;   /* 改行をそのまま表示 */
+      line-height: 1.9;        /* 読みやすい行間 */
+      font-size: 15px;
+      min-height: 160px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      color: var(--text);
+    }
+    #result-text.empty { color: var(--text-sub); }
+
+    .result-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .result-actions .btn { flex: 1; }
+
+    /* コピー成功時のボタン表示 */
+    #copy-btn.copied { color: var(--success); border-color: var(--success); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>スマリブ返信AI</h1>
+    <button id="theme-toggle" type="button">🌙 ダーク</button>
+  </header>
+
+  <main>
+    <!-- ===== 左カラム：入力 ===== -->
+    <section class="card">
+      <label class="field-label" for="received">受信メッセージ</label>
+      <textarea id="received" rows="6" placeholder="楽待・健美家・メール等の受信文をペースト"></textarea>
+
+      <label class="field-label" for="rough">ラフ入力（返したい内容のメモ）</label>
+      <textarea id="rough" rows="4" placeholder="返したい内容のメモ（例：資料送付できる、内見は土日OK）"></textarea>
+
+      <label class="field-label">問い合わせ元</label>
+      <div class="segment" id="source-segment">
+        <button type="button" data-value="rakumachi" class="active">楽待</button>
+        <button type="button" data-value="kenbiya">健美家</button>
+        <button type="button" data-value="direct">直接</button>
+        <button type="button" data-value="gyosha">業者間</button>
+      </div>
+
+      <label class="field-label">返信トーン</label>
+      <div class="segment" id="tone-segment">
+        <button type="button" data-value="short">短文</button>
+        <button type="button" data-value="standard" class="active">標準</button>
+        <button type="button" data-value="polite">丁寧</button>
+      </div>
+
+      <button id="generate-btn" class="btn btn-primary" type="button">
+        <span class="spinner"></span>
+        <span class="btn-label">返信案を生成</span>
+      </button>
+    </section>
+
+    <!-- ===== 右カラム：結果 ===== -->
+    <section class="card">
+      <div id="error-bar"></div>
+
+      <div class="tabs">
+        <button type="button" id="tab-polite" class="active">丁寧版</button>
+        <button type="button" id="tab-concise">簡潔版</button>
+      </div>
+
+      <div id="result-text" class="empty">ここに生成結果が表示されます</div>
+
+      <label class="field-label" for="extra">追加指示（再生成用）</label>
+      <input type="text" id="extra" placeholder="例：絵文字を1つ入れて／値引きには応じない旨を追加">
+
+      <div class="result-actions">
+        <button id="copy-btn" class="btn" type="button">コピー</button>
+        <button id="regen-btn" class="btn" type="button">
+          <span class="spinner"></span>
+          <span class="btn-label">再生成</span>
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // ============================================
+    // ★ここだけ書き換えればOK：Cloudflare WorkersのURL
+    // ============================================
+    const CONFIG = {
+      API_URL: "https://reply-ai-api.YOUR-SUBDOMAIN.workers.dev"
+    };
+
+    // ============================================
+    // 画面の部品を取得
+    // ============================================
+    const receivedEl = document.getElementById("received");
+    const roughEl = document.getElementById("rough");
+    const extraEl = document.getElementById("extra");
+    const generateBtn = document.getElementById("generate-btn");
+    const regenBtn = document.getElementById("regen-btn");
+    const copyBtn = document.getElementById("copy-btn");
+    const resultTextEl = document.getElementById("result-text");
+    const errorBar = document.getElementById("error-bar");
+    const tabPolite = document.getElementById("tab-polite");
+    const tabConcise = document.getElementById("tab-concise");
+    const themeToggle = document.getElementById("theme-toggle");
+
+    // ============================================
+    // アプリの状態（生成結果や選択中のタブを記憶）
+    // ※APIキーは絶対に扱わない・保存しない
+    // ============================================
+    const state = {
+      polite: "",          // 丁寧版の文面
+      concise: "",         // 簡潔版の文面
+      activeTab: "polite", // 今表示しているタブ
+      source: "rakumachi", // 問い合わせ元
+      tone: "standard"     // 返信トーン
+    };
+
+    // localStorage に下書きを保存するときのキー名
+    const DRAFT_KEY = "replyai_draft";
+    const THEME_KEY = "replyai_theme";
+
+    // ============================================
+    // ダークモード
+    // ============================================
+    function applyTheme(theme) {
+      // theme は "dark" / "light" / null（null=OS設定に従う）
+      let effective = theme;
+      if (!effective) {
+        // OS設定（prefers-color-scheme）に自動追従
+        effective = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      document.documentElement.dataset.theme = effective;
+      themeToggle.textContent = effective === "dark" ? "☀️ ライト" : "🌙 ダーク";
+    }
+
+    themeToggle.addEventListener("click", () => {
+      // 今と逆のテーマに切り替えて保存
+      const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+      localStorage.setItem(THEME_KEY, next);
+      applyTheme(next);
+    });
+
+    // OS設定が変わったとき（手動選択していなければ）自動追従
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+      if (!localStorage.getItem(THEME_KEY)) applyTheme(null);
+    });
+
+    // 起動時：保存されたテーマがあれば適用、なければOS設定
+    applyTheme(localStorage.getItem(THEME_KEY));
+
+    // ============================================
+    // セグメントボタン（問い合わせ元・トーン）の制御
+    // ============================================
+    function setupSegment(segmentId, onChange) {
+      const segment = document.getElementById(segmentId);
+      segment.addEventListener("click", (e) => {
+        const btn = e.target.closest("button");
+        if (!btn) return;
+        // すべてのボタンの選択を外してから、押したボタンを選択状態に
+        segment.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        onChange(btn.dataset.value);
+        saveDraft();
+      });
+    }
+
+    setupSegment("source-segment", (v) => { state.source = v; });
+    setupSegment("tone-segment", (v) => { state.tone = v; });
+
+    function setSegmentValue(segmentId, value) {
+      const segment = document.getElementById(segmentId);
+      segment.querySelectorAll("button").forEach(b => {
+        b.classList.toggle("active", b.dataset.value === value);
+      });
+    }
+
+    // ============================================
+    // 下書きの自動保存・復元（localStorage）
+    // 保存するのは入力文と選択状態のみ。APIキーは保存しない。
+    // ============================================
+    function saveDraft() {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({
+          received: receivedEl.value,
+          rough: roughEl.value,
+          source: state.source,
+          tone: state.tone
+        }));
+      } catch (e) {
+        // 保存できなくてもアプリは動くので何もしない
+      }
+    }
+
+    function restoreDraft() {
+      try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (!raw) return;
+        const draft = JSON.parse(raw);
+        if (draft.received) receivedEl.value = draft.received;
+        if (draft.rough) roughEl.value = draft.rough;
+        if (draft.source) { state.source = draft.source; setSegmentValue("source-segment", draft.source); }
+        if (draft.tone) { state.tone = draft.tone; setSegmentValue("tone-segment", draft.tone); }
+      } catch (e) {
+        // 壊れたデータは無視
+      }
+    }
+
+    receivedEl.addEventListener("input", saveDraft);
+    roughEl.addEventListener("input", saveDraft);
+    restoreDraft();
+
+    // ============================================
+    // タブ切り替え（丁寧版 / 簡潔版）
+    // ============================================
+    function showTab(tab) {
+      state.activeTab = tab;
+      tabPolite.classList.toggle("active", tab === "polite");
+      tabConcise.classList.toggle("active", tab === "concise");
+      renderResult();
+    }
+
+    function renderResult() {
+      const text = state.activeTab === "polite" ? state.polite : state.concise;
+      if (text) {
+        resultTextEl.textContent = text;
+        resultTextEl.classList.remove("empty");
+      } else {
+        resultTextEl.textContent = "ここに生成結果が表示されます";
+        resultTextEl.classList.add("empty");
+      }
+    }
+
+    tabPolite.addEventListener("click", () => showTab("polite"));
+    tabConcise.addEventListener("click", () => showTab("concise"));
+
+    // ============================================
+    // エラー表示
+    // ============================================
+    function showError(message) {
+      errorBar.textContent = message;
+      errorBar.style.display = "block";
+    }
+    function hideError() {
+      errorBar.style.display = "none";
+    }
+
+    // ============================================
+    // ボタンのローディング表示（処理中はボタンを無効化）
+    // ============================================
+    function setLoading(btn, isLoading, loadingLabel, normalLabel) {
+      btn.disabled = isLoading;
+      btn.classList.toggle("loading", isLoading);
+      btn.querySelector(".btn-label").textContent = isLoading ? loadingLabel : normalLabel;
+    }
+
+    // ============================================
+    // API呼び出し（60秒でタイムアウト）
+    // ============================================
+    async function callApi(body) {
+      // API_URLが初期値のままなら設定ミスとして案内する
+      if (CONFIG.API_URL.includes("YOUR-SUBDOMAIN")) {
+        throw new Error("API URLが未設定です。index.htmlのCONFIG.API_URLを設定してください。");
+      }
+
+      // 60秒たっても応答がなければ中断するタイマー
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 60000);
+
+      try {
+        const res = await fetch(CONFIG.API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: controller.signal
+        });
+        if (!res.ok) {
+          // サーバー側からのエラーメッセージがあれば使う
+          let msg = "";
+          try {
+            const errJson = await res.json();
+            msg = errJson.error || "";
+          } catch (e) { /* JSONでなければ無視 */ }
+          throw new Error(msg || "生成に失敗しました。通信環境またはAPI設定を確認してください。");
+        }
+        return await res.json();
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    // ============================================
+    // 「返信案を生成」ボタン
+    // ============================================
+    generateBtn.addEventListener("click", async () => {
+      hideError();
+
+      const received = receivedEl.value.trim();
+      const rough = roughEl.value.trim();
+
+      // 両方空なら送信しない
+      if (!received && !rough) {
+        showError("受信メッセージかラフ入力のどちらかを入力してください");
+        return;
+      }
+
+      setLoading(generateBtn, true, "生成中...", "返信案を生成");
+      try {
+        const data = await callApi({
+          mode: "both",
+          received: received,
+          rough: rough,
+          source: state.source,
+          tone: state.tone
+        });
+        state.polite = data.polite || "";
+        state.concise = data.concise || "";
+        // 生成完了後は丁寧版タブを表示
+        showTab("polite");
+      } catch (err) {
+        if (err.name === "AbortError") {
+          showError("生成に失敗しました。通信環境またはAPI設定を確認してください。");
+        } else {
+          showError(err.message || "生成に失敗しました。通信環境またはAPI設定を確認してください。");
+        }
+      } finally {
+        setLoading(generateBtn, false, "生成中...", "返信案を生成");
+      }
+    });
+
+    // ============================================
+    // 「再生成」ボタン（今表示中のタブだけ作り直す）
+    // ============================================
+    regenBtn.addEventListener("click", async () => {
+      hideError();
+
+      const currentText = state.activeTab === "polite" ? state.polite : state.concise;
+      if (!currentText) {
+        showError("先に「返信案を生成」を実行してください");
+        return;
+      }
+
+      setLoading(regenBtn, true, "生成中...", "再生成");
+      try {
+        const data = await callApi({
+          mode: "single",
+          variant: state.activeTab,           // "polite" か "concise"
+          received: receivedEl.value.trim(),
+          rough: roughEl.value.trim(),
+          source: state.source,
+          tone: state.tone,
+          currentText: currentText,           // 今の文面
+          extraInstruction: extraEl.value.trim()  // 追加指示
+        });
+        // 表示中のタブの文面だけ差し替える
+        if (state.activeTab === "polite") {
+          state.polite = data.text || "";
+        } else {
+          state.concise = data.text || "";
+        }
+        renderResult();
+      } catch (err) {
+        if (err.name === "AbortError") {
+          showError("生成に失敗しました。通信環境またはAPI設定を確認してください。");
+        } else {
+          showError(err.message || "生成に失敗しました。通信環境またはAPI設定を確認してください。");
+        }
+      } finally {
+        setLoading(regenBtn, false, "生成中...", "再生成");
+      }
+    });
+
+    // ============================================
+    // 「コピー」ボタン
+    // ============================================
+    copyBtn.addEventListener("click", async () => {
+      const text = state.activeTab === "polite" ? state.polite : state.concise;
+      if (!text) return;
+
+      let copied = false;
+      // まず新しいクリップボードAPIを試す
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          copied = true;
+        } catch (e) {
+          copied = false;
+        }
+      }
+      // 失敗したら古い方法（textareaを選択してコピー）にフォールバック
+      if (!copied) {
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          copied = document.execCommand("copy");
+          document.body.removeChild(ta);
+        } catch (e) {
+          copied = false;
+        }
+      }
+
+      if (copied) {
+        // 1.5秒だけ「コピーしました ✓」に変える
+        copyBtn.textContent = "コピーしました ✓";
+        copyBtn.classList.add("copied");
+        setTimeout(() => {
+          copyBtn.textContent = "コピー";
+          copyBtn.classList.remove("copied");
+        }, 1500);
+      } else {
+        showError("コピーに失敗しました。文面を長押しして手動でコピーしてください。");
+      }
+    });
+
+    // ============================================
+    // Service Worker 登録（PWAのオフラインキャッシュ用）
+    // GitHub Pagesのサブパス配信を考慮して相対パスで登録
+    // ============================================
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./service-worker.js").catch((e) => {
+          // 登録に失敗してもアプリ自体は動くので、コンソールに記録だけする
+          console.error("Service Worker登録に失敗:", e);
+        });
+      });
+    }
+  </script>
+</body>
+</html>

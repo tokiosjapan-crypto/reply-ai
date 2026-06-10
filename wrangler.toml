@@ -1,0 +1,11 @@
+name = "reply-ai-api"
+main = "worker.js"
+compatibility_date = "2026-06-01"
+
+# 環境変数（モデル変更・CORS制限はダッシュボード or ここで）
+# [vars]
+# ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
+# ALLOWED_ORIGIN = "https://tokiosjapan-crypto.github.io"
+
+# ※ ANTHROPIC_API_KEY は Secret として登録してください（このファイルには書かない）
+#    CLIの場合: npx wrangler secret put ANTHROPIC_API_KEY
