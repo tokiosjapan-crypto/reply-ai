@@ -2,10 +2,13 @@ name = "reply-ai-api"
 main = "worker.js"
 compatibility_date = "2026-06-01"
 
-# 環境変数（モデル変更・CORS制限はダッシュボード or ここで）
-# [vars]
-# ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
-# ALLOWED_ORIGIN = "https://tokiosjapan-crypto.github.io"
+# 環境変数（モデル変更・CORS制限）
+[vars]
+# 初期指定モデル claude-sonnet-4-20250514 は 2026-06-15 に廃止されるため、
+# 後継モデルを環境変数で指定（worker.js の DEFAULT_MODEL は変更不要）
+ANTHROPIC_MODEL = "claude-sonnet-4-6"
+# 自社のGitHub Pages以外からの利用をブロック（第三者のAPI使い込み防止）
+ALLOWED_ORIGIN = "https://tokiosjapan-crypto.github.io"
 
 # ※ ANTHROPIC_API_KEY は Secret として登録してください（このファイルには書かない）
 #    CLIの場合: npx wrangler secret put ANTHROPIC_API_KEY
