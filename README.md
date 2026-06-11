@@ -3,6 +3,12 @@
 楽待・健美家・メール等の問い合わせに対する返信文を、AIが「丁寧版」「簡潔版」の2パターンで作成するアプリです。
 iPhoneのホーム画面に追加すれば、アプリのように使えます（PWA）。
 
+> **✅ 設置済み（2026-06-11）**
+> - アプリ画面: https://tokiosjapan-crypto.github.io/reply-ai/
+> - 中継API: https://reply-ai-api.sumalive.workers.dev （APIキー設定済み・モデルは claude-sonnet-4-6 を使用）
+>
+> 以下の手順書は、作り直し・引っ越しの際に使ってください。
+
 ---
 
 ## 1. これは何か（全体の仕組み）
